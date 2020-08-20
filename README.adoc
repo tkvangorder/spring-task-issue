@@ -25,7 +25,7 @@ This is a simple spring cloud task application that is configured to create a sp
 
 There is a docker-compose.yml file in the root of this repository that can be used to stand-up both Rabbit and the push gateway.
 
-Simple use `docker-compose up`
+Simply use `docker-compose up`
 
 Once the containers are up at running you can run the application to reproduce the problem.
 
