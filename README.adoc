@@ -1,0 +1,72 @@
+= Project to demonstrate how PushGateway interacts with Spring Integration on shutdown
+Tyler Van Gorder <tyler.vangorder@build.com>
+:toc: left
+:sectlinks:
+:sectanchors:
+:stylesheet: asciidoctor.css
+// If not rendered on github, we use fonts for the captions, otherwise, we assign github emojis. DO NOT PUT A BLANK LINE BEFORE THIS, the ICONS don't render.
+ifndef::env-github[]
+:icons: font
+endif::[]
+ifdef::env-github[]
+:important-caption: :exclamation:
+:warning-caption: :x:
+:caution-caption: :hand:
+:note-caption: :bulb:
+:tip-caption: :mag:
+endif::[]
+
+== Introduction
+
+This repository is a sandbox for demonstrating an issue we (build.com) ran into when using the Prometheus push gateway in combination with Spring Integration. We use Micrometer in combination with Prometheus within our Spring Cloud Tasks and since these are often transient, short running applications we use push gateway to publish these metrics (and we have configured the push gateway client to push metrics on shutdown).
+
+== Setup
+
+This is a simple spring cloud task application that is configured to create a spring integration flow to/from a Rabbit queue. Additionally, we have added the actuator, prometheus, and the push gateway as dependencies.
+
+There is a docker-compose.yml file in the root of this repository that can be used to stand-up both Rabbit and the push gateway.
+
+Simple use `docker-compose up`
+
+Once the containers are up at running you can run the application to reproduce the problem.
+
+== Details
+
+If the application is shutting down, the push gateway will throw an exception when it attempts to get the meters registered by Spring Integration. This is happening because the `PrometheusPushGatewayManager.shutdown()` method is being called by the container when destroying beans and some/all of the MessageChannel beans have already been destroyed. We were able to fix this on our end by overriding the PrometheusPushGatewayManager, disabling the destroy method and instead registering an EventListener for the ContextClosedEvent.
+
+There is also another case where you can run into this exception. The PrometheusPushGatewayManager uses a background thread to schedule "push" events and if one of these events is triggered after the container has initiated shutodwn, you will see a similar exception.
+
+This is an example of the exception being thrown on shutdown:
+----
+2020-08-20 12:54:27.020  WARN 83913 --- [           main] i.m.c.instrument.internal.DefaultGauge   : Failed to apply the value function for the gauge 'spring.integration.channels'. Note that subsequent logs will be logged at debug level.
+
+org.springframework.beans.factory.BeanCreationNotAllowedException: Error creating bean with name 'nullChannel': Singleton bean creation not allowed while singletons of this factory are in destruction (Do not request a bean from a BeanFactory in a destroy method implementation!)
+	at org.springframework.beans.factory.support.DefaultSingletonBeanRegistry.getSingleton(DefaultSingletonBeanRegistry.java:212) ~[spring-beans-5.2.8.RELEASE.jar:5.2.8.RELEASE]
+	at org.springframework.beans.factory.support.AbstractBeanFactory.doGetBean(AbstractBeanFactory.java:322) ~[spring-beans-5.2.8.RELEASE.jar:5.2.8.RELEASE]
+	at org.springframework.beans.factory.support.AbstractBeanFactory.getBean(AbstractBeanFactory.java:202) ~[spring-beans-5.2.8.RELEASE.jar:5.2.8.RELEASE]
+	at org.springframework.beans.factory.support.DefaultListableBeanFactory.getBeansOfType(DefaultListableBeanFactory.java:624) ~[spring-beans-5.2.8.RELEASE.jar:5.2.8.RELEASE]
+	at org.springframework.beans.factory.support.DefaultListableBeanFactory.getBeansOfType(DefaultListableBeanFactory.java:612) ~[spring-beans-5.2.8.RELEASE.jar:5.2.8.RELEASE]
+	at org.springframework.context.support.AbstractApplicationContext.getBeansOfType(AbstractApplicationContext.java:1243) ~[spring-context-5.2.8.RELEASE.jar:5.2.8.RELEASE]
+	at org.springframework.integration.config.IntegrationManagementConfigurer.lambda$registerComponentGauges$1(IntegrationManagementConfigurer.java:448) ~[spring-integration-core-5.3.2.RELEASE.jar:5.3.2.RELEASE]
+	at io.micrometer.core.instrument.internal.DefaultGauge.value(DefaultGauge.java:54) ~[micrometer-core-1.5.4.jar:1.5.4]
+	at io.micrometer.prometheus.PrometheusMeterRegistry.lambda$newGauge$5(PrometheusMeterRegistry.java:208) ~[micrometer-registry-prometheus-1.5.4.jar:1.5.4]
+	at io.micrometer.prometheus.MicrometerCollector.collect(MicrometerCollector.java:70) ~[micrometer-registry-prometheus-1.5.4.jar:1.5.4]
+	at io.prometheus.client.CollectorRegistry$MetricFamilySamplesEnumeration.findNextElement(CollectorRegistry.java:190) ~[simpleclient-0.9.0.jar:na]
+	at io.prometheus.client.CollectorRegistry$MetricFamilySamplesEnumeration.nextElement(CollectorRegistry.java:223) ~[simpleclient-0.9.0.jar:na]
+	at io.prometheus.client.CollectorRegistry$MetricFamilySamplesEnumeration.nextElement(CollectorRegistry.java:144) ~[simpleclient-0.9.0.jar:na]
+	at io.prometheus.client.exporter.common.TextFormat.write004(TextFormat.java:22) ~[simpleclient_common-0.8.1.jar:na]
+	at io.prometheus.client.exporter.PushGateway.doRequest(PushGateway.java:310) ~[simpleclient_pushgateway-0.9.0.jar:na]
+	at io.prometheus.client.exporter.PushGateway.pushAdd(PushGateway.java:182) ~[simpleclient_pushgateway-0.9.0.jar:na]
+	at org.springframework.boot.actuate.metrics.export.prometheus.PrometheusPushGatewayManager.push(PrometheusPushGatewayManager.java:108) ~[spring-boot-actuator-2.3.3.RELEASE.jar:2.3.3.RELEASE]
+	at org.springframework.boot.actuate.metrics.export.prometheus.PrometheusPushGatewayManager.shutdown(PrometheusPushGatewayManager.java:146) ~[spring-boot-actuator-2.3.3.RELEASE.jar:2.3.3.RELEASE]
+	at org.springframework.boot.actuate.metrics.export.prometheus.PrometheusPushGatewayManager.shutdown(PrometheusPushGatewayManager.java:136) ~[spring-boot-actuator-2.3.3.RELEASE.jar:2.3.3.RELEASE]
+	at java.base/jdk.internal.reflect.NativeMethodAccessorImpl.invoke0(Native Method) ~[na:na]
+	at java.base/jdk.internal.reflect.NativeMethodAccessorImpl.invoke(NativeMethodAccessorImpl.java:62) ~[na:na]
+	at java.base/jdk.internal.reflect.DelegatingMethodAccessorImpl.invoke(DelegatingMethodAccessorImpl.java:43) ~[na:na]
+	at java.base/java.lang.reflect.Method.invoke(Method.java:566) ~[na:na]
+	at org.springframework.beans.factory.support.DisposableBeanAdapter.invokeCustomDestroyMethod(DisposableBeanAdapter.java:339) ~[spring-beans-5.2.8.RELEASE.jar:5.2.8.RELEASE]
+	at org.springframework.beans.factory.support.DisposableBeanAdapter.destroy(DisposableBeanAdapter.java:273) ~[spring-beans-5.2.8.RELEASE.jar:5.2.8.RELEASE]----
+
+
+
+

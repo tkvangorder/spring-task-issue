@@ -1,0 +1,26 @@
+version: '3'
+
+
+volumes:
+  rabbitmq:
+  
+services:
+  push-gateway:
+    container_name: pushgateway
+    image: "prom/pushgateway:latest"
+    ports:
+      - "9091:9091"
+  rabbit:
+    container_name: rabbit
+    image: 'merapar/rabbitmq-docker'    
+    hostname: 'rabbitmq-docker'
+    environment:
+      - RABBITMQ_DEFAULT_VHOST=test
+      - RABBITMQ_DEFAULT_USER=test
+      - RABBITMQ_DEFAULT_PASS=test
+    ports:
+      - "5672:5672"
+      - "15672:15672"  
+    volumes:
+      - rabbitmq:/var/lib/rabbitmq
+  

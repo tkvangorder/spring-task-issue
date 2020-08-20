@@ -1,0 +1,24 @@
+# Configuring a Rabbit connection
+spring:
+  rabbitmq:
+    host: localhost
+    port: 5672
+    username: test
+    password: test
+    virtual-host: test
+    requested-heartbeat: 30
+  # Force spring cloud task to close when the commandline runner is complete.
+  cloud:
+    task:
+      closecontextEnabled: true
+
+# Enable both Prometheus and the Push Gateway
+management:
+  metrics:
+    export:
+      prometheus:
+        enabled: true
+        pushgateway:
+          enabled: true
+          push-rate: 5s
+          shutdown-operation: PUSH # Push metrics on shut down.
