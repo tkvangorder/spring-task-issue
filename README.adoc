@@ -36,7 +36,7 @@ This repository includes a fix similar to what we are using in our production co
 
 .src/main/resources/application.yml @ Line 26-27
 ---- 
-include::src/main/resources/application.yml[lines=26..27, source]
+include::./src/main/resources/application.yml[lines=26..27, source]
 ----
 
 The "fix" is creating a customized version of the PrometheusPushGatewayManager so that the default provided by Spring Boot will back off.
@@ -44,14 +44,14 @@ We first disable the destroy method from being registered with the container:
 
 .src/main/java/com/example/demo/PrometheusPushFixConfiguration.java @ Line 41
 ---- 
-include::src/main/java/com/example/demo/PrometheusPushFixConfiguration.java[lines=41, source, java]
+include::./src/main/java/com/example/demo/PrometheusPushFixConfiguration.java[lines=41, source, java]
 ----
 
 And in the custom gateway manager we trigger shutdown via a ContextClosedEvent:
 
 .src/main/java/com/example/demo/PrometheusPushGatewayManagerFix.java @ Line 24
 ---- 
-include::src/main/java/com/example/demo/PrometheusPushGatewayManagerFix.java[lines=24..27, source, java]
+include::./src/main/java/com/example/demo/PrometheusPushGatewayManagerFix.java[lines=24..27, source, java]
 ----
 
 
