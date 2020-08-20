@@ -29,11 +29,35 @@ Simply use `docker-compose up`
 
 Once the containers are up at running you can run the application to reproduce the problem.
 
+== Fixing The Problem
+
+You can fix the issue by triggering the "push on close" by listening for a `ContextClosedEvent` which is triggered before beans are destroyed.
+This repository includes a fix similar to what we are using in our production code. To enable the fix you can set the property `push-gateway-fix.enabled` to `true` within the application.yml file:
+
+.src/main/resources/application.yml @ Line 26-27
+---- 
+include::src/main/resources/application.yml[lines=26..27, source]
+----
+
+The "fix" is creating a customized version of the PrometheusPushGatewayManager so that the default provided by Spring Boot will back off.
+We first disable the destroy method from being registered with the container:
+
+.src/main/java/com/example/demo/PrometheusPushFixConfiguration.java @ Line 41
+---- 
+include::src/main/java/com/example/demo/PrometheusPushFixConfiguration.java[lines=41, source, java]
+----
+
+And in the custom gateway manager we trigger shutdown via a ContextClosedEvent:
+
+.src/main/java/com/example/demo/PrometheusPushGatewayManagerFix.java @ Line 24
+---- 
+include::src/main/java/com/example/demo/PrometheusPushGatewayManagerFix.java[lines=24..27, source, java]
+----
+
+
 == Details
 
 If the application is shutting down, the push gateway will throw an exception when it attempts to get the meters registered by Spring Integration. This is happening because the `PrometheusPushGatewayManager.shutdown()` method is being called by the container when destroying beans and some/all of the MessageChannel beans have already been destroyed. We were able to fix this on our end by overriding the PrometheusPushGatewayManager, disabling the destroy method and instead registering an EventListener for the ContextClosedEvent.
-
-There is also another case where you can run into this exception. The PrometheusPushGatewayManager uses a background thread to schedule "push" events and if one of these events is triggered after the container has initiated shutodwn, you will see a similar exception.
 
 This is an example of the exception being thrown on shutdown:
 ----

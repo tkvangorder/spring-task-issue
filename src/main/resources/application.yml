@@ -22,3 +22,6 @@ management:
           enabled: true
           push-rate: 5s
           shutdown-operation: PUSH # Push metrics on shut down.
+
+push-gateway-fix:
+  enabled: false
