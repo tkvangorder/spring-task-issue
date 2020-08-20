@@ -1,6 +1,5 @@
 = Project to demonstrate how PushGateway interacts with Spring Integration on shutdown
 Tyler Van Gorder <tyler.vangorder@build.com>
-:toc: left
 :sectlinks:
 :sectanchors:
 :stylesheet: asciidoctor.css
